@@ -128,6 +128,23 @@ impl<'a, T> Consumer<'a, T> {
     }
 }
 
+impl<'a, T: Copy> Consumer<'a, T> {
+    /// Try reading a value without dequeuing.
+    ///
+    /// # Blocking
+    ///
+    /// This method blocks if the corresponding [`Producer`] is currently [`enqueue_overwrite`](Producer::enqueue_overwrite)ing
+    pub fn peek(&mut self) -> Option<T> {
+        if self.ssq.full.load(Ordering::Acquire) {
+            // SAFETY: locking and holding onto the guard is important for enqueue_overwrite to be sound.
+            let _guard = self.ssq.writing.lock();
+            Some(unsafe { ptr::read(self.ssq.val.get().cast()) })
+        } else {
+            None
+        }
+    }
+}
+
 /// Safety: We gurarantee the safety using an `AtomicBool` to gate the read of the `UnsafeCell`.
 unsafe impl<'a, T> Send for Consumer<'a, T> {}
 
